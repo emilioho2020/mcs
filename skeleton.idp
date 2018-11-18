@@ -1,0 +1,348 @@
+//DO NOT CHANGE THIS VOCABULARY
+LTCvocabulary RushHourVoc_fixed {
+    //LTC time
+    type Time isa int
+    Start:Time
+    partial Next(Time):Time
+    
+    //Distance
+    type Distance isa int
+    //Size for obstacles and cars
+    type Size isa int
+    
+    //Standard mathematical coordinate system
+    type Co isa int
+    type XCo isa Co
+    type YCo isa Co
+    type Pos constructed from { P(XCo, YCo) }
+    
+    //Driving directions
+    type Dir constructed from { Up, Down, Left, Right }
+    //Entity orientation
+    type Orientation constructed from {Hor, Vert}
+    
+    //Types of objects: cars and obstacles
+    type Entity
+    type Car isa Entity
+    type Obstacle isa Entity
+    
+    //Moving a car in a certain direction over the specified distance
+    type Move constructed from { M(Car, Dir, Distance) }
+    
+
+    //An entity's position (given by its upper Left corner).
+    //The initial position
+    Init_Pos(Entity):Pos
+    //The variable position at each time
+    GetPos(Time, Entity):Pos
+    
+    //Car attributes: size, orientation and goal position (if any)
+    GetSize(Car):Size
+    GetOrientation(Car):Orientation
+    Goal(Car,Pos)
+   
+    //Obstacle attributes: size in both directions
+    GetWidth(Obstacle):Size
+    GetHeight(Obstacle):Size
+    
+    //Predicate specifying whether the game has ended at a certain time
+    GameEnded(Time)
+    //Predicate speficying whether the game is won at a certain time
+    Won(Time)
+    
+    //Giving cars a color (only used for visulization purposes)
+    type Color constructed from { Red, Orange, Yellow, Green, Blue, Purple }
+    GetColor(Car): Color
+    
+    //Predicate that specifies if a certain car can move in a given direction over a given distance from its current position
+   	CanMove(Time, Car, Dir, Distance)
+}
+
+//DO NOT CHANGE THIS VOCABULARY
+LTCvocabulary RushHourVoc_action {
+    extern vocabulary RushHourVoc_fixed
+    //The particular move that is performed at each time
+    MoveAt(Time,Move)
+}
+
+LTCvocabulary RushHourVoc {
+    extern vocabulary RushHourVoc_action
+    // ADD YOUR HELPER PREDICATES AND FUNCTIONS HERE
+    C_GetPos(Time,Entity,Pos)
+    Cn_GetPos(Time,Entity,Pos)
+    
+    NewPos(Pos,Move):Pos
+    
+    //True when the pos is occupied by a car at this time
+    Occupies(Time,Entity,Pos)
+    
+    //True if the position is obstructed by the obstacle during this game
+    //Obstructs(Obstacle,Pos)
+    
+    isFree(Time,Pos)
+}
+
+//DO NOT CHANGE THIS THEORY
+theory AuxTheo : RushHourVoc {
+    //Defining time
+    Start = MIN[:Time].
+    {
+        ! t[Time] : Next(t) = t + 1 <- Time(t+1). 
+    }
+    
+    //0 should be a valid distance
+    Distance(0).
+    MIN[:Size] = 1.
+}
+
+theory RushHourTheory : RushHourVoc {
+	// PLACE YOUR THEORY HERE
+    
+    //Inertia GetPos
+    {
+    	! e [Entity] x[Pos] : GetPos(Start,e) = x <- Init_Pos(e) = x.
+		! t [Time] e [Entity] x [Pos] : GetPos(Next(t),e) = x <- C_GetPos(t,e,x).
+		! t [Time] e [Entity] x [Pos] : GetPos(Next(t),e) = x<- GetPos(t,e) = x & ~Cn_GetPos(t,e,x).
+	}
+    
+    {
+		// Expressing causations GetPos
+		! t [Time] e [Entity] x [Pos] : C_GetPos(t,e,x) <- ? m [Move] dir [Dir] dist [Distance]: m = M(e,dir,dist) & MoveAt(t,m) & NewPos(GetPos(t,e),m) = x.
+		! t [Time] e [Entity] x [Pos] : Cn_GetPos(t,e,x) <- ? m [Move] dir [Dir] dist [Distance]: m = M(e,dir,dist) & MoveAt(t,m) & NewPos(GetPos(t,e),m) ~= x.
+	}
+    
+    
+    //newPos definition
+    //c is a dummy variable (not used, but held for form of Move)
+    {
+    ! x [XCo] y [YCo] c [Entity] dist [Distance] s [Pos] : NewPos(P(x,y),M(c,Up,dist)) = s <- s = P(x,y+dist).
+    ! x [XCo] y [YCo] c [Entity] dist [Distance] s [Pos] : NewPos(P(x,y),M(c,Down,dist)) = s <- s = P(x,y-dist).
+    ! x [XCo] y [YCo] c [Entity] dist [Distance] s [Pos] : NewPos(P(x,y),M(c,Right,dist)) = s <- s = P(x+dist,y).
+    ! x [XCo] y [YCo] c [Entity] dist [Distance] s [Pos] : NewPos(P(x,y),M(c,Left,dist)) = s <- s = P(x-dist,y).
+    }
+
+    //Occupies Definition
+    {
+        ! t [Time] e [Entity] p [Pos] : Occupies(t,e,p) <- GetPos(t,e) = p.
+        //cars
+        ! t [Time] c [Car] x [XCo] y[YCo] : Occupies(t,c,P(x,y)) <- ? x2 [XCo] y2 [YCo] : 
+        	GetPos(t,c) = P(x2,y2) & 
+        	GetOrientation(c) = Hor & 
+        	x2 < x < x2+GetSize(c).
+        ! t [Time] c [Car] x [XCo] y[YCo] : Occupies(t,c,P(x,y)) <- ? x2 [XCo] y2 [YCo] : GetPos(t,c) = P(x2,y2) & GetOrientation(c) = Vert & y2-GetSize(c) < y < y2.
+        //obstacles
+        ! t [Time] o [Obstacle] x [XCo] y[YCo] : Occupies(t,o,P(x,y)) <- ? x2 [XCo] y2 [YCo] : GetPos(t,o) = P(x2,y2) & x2 =< x < x2+GetWidth(o) & y2 =< y < y2+GetHeight(o).
+        
+    }
+    
+    //isFree
+    {
+        ! t [Time] p [Pos] : isFree(t,p) <- ~? e [Entity] : Occupies(t,e,p).
+    }
+    
+    //IMPLEMENTATION OF CANMOVE (kan dit duidelijker?)
+    //extremity has to move into a free position
+    //
+    {
+        ! t [Time] c [Car] dir [Dir] : CanMove(t,c,dir,0) <- .//base case
+        //Up
+        ! t [Time] c [Car] dist [Distance] : CanMove(t,c,Up,dist) <- 
+        	CanMove(t,c,Up,dist-1) & 
+        	(isFree(t,NewPos(GetPos(t,c),M(c,Up,1)))).
+        //Left
+        ! t [Time] c [Car] dist [Distance] : CanMove(t,c,Left,dist) <- 
+        	CanMove(t,c,Left,dist-1) & 
+        	(isFree(t,NewPos(GetPos(t,c),M(c,Left,1)))).
+        //Right
+        ! t [Time] c [Car] dist [Distance] x [XCo] y [YCo]: CanMove(t,c,Right,dist) <- 
+        	CanMove(t,c,Right,dist-1) & 
+        	P(x,y) = GetPos(t,c) & 
+        	(isFree(t,NewPos(P(x+GetSize()-1,y),M(c,Right,1))).
+        //Down
+        ! t [Time] c [Car] dist [Distance] x [XCo] y [YCo]: CanMove(t,c,Left,dist) <- 
+        	CanMove(t,c,Left,dist-1) & 
+        	(isFree(t,NewPos(P(x,y-GetSize(c)),M(c,Left,1))).
+    }
+    
+    /*obstructs definition (CAN BE IMPLEMENTED AS OCCUPIES)
+    {
+        ! p [Pos] o [Obstacle] : Obstructs(o,p) <- ? x2 [XCo] y2 [YCo] : GetPos(Start,t,c) = P(x2,y2) & GetOrientation(c) = Hor & x2 < x =< x2+GetSize(c).
+    }
+    */
+    
+    
+    //Constraints
+    
+    //only one move at a time before the game ends
+    ! t [Time] : ~GameEnded(t) => ?1 m [Move] : MoveAt(t,m).
+    //no moves after the game is ended
+    ! t [Time] : GameEnded(t) => ~? m [Move] : MoveAt(t,m).
+    
+    //no two cars of same color should both have a goal
+    ! c [Car] p [Pos] p2 [Pos]: Goal(c,p) => ~? c2 : GetColor(c) = GetColor(c2) & Goal(c2,p2).
+    
+    //each car can have at most one goal
+    ! c [Car] : #{p [Pos] : Goal(c,p)} =< 1.
+    
+    //a car can never overlap with another
+    ! t [Time] p [Pos] :  #{c [Car] : Occupies(t,c,p)} =< 1.
+    
+    //a car can never occupy a position outside of the board
+    // => the extremities have to occupy some position on the board
+    ! t [Time] c [Car] x [XCo] y [YCo] x2 [XCo] y2 [YCo] : ?1 p [Pos] : Occupies(t,c,p) & p = P(x,y) & GetPos(t,c) = P(x2,y2) & ((GetOrientation(c) = Hor & x = x2 + GetSize(c) - 1) | GetOrientation(c) = Vert & y = y2 + GetSize(c) -1).
+    
+    //a move can be made only if the car can move to that position
+    ! t [Time] c [Car] dir [Dir] dist [Distance] : MoveAt(t,M(c,dir,dist)) => CanMove(t,c,dir,dist).
+    
+    
+    
+}
+
+
+procedure main() {
+    // various options, if IDP takes a long time, try commenting out some to see the effect
+    stdoptions.splitdefs = false
+    stdoptions.postprocessdefs = false
+    stdoptions.cpsupport = false
+    stdoptions.groundwithbounds = false
+    stdoptions.liftedunitpropagation = false
+    //allVerifications()
+    show(Easy_3by3)
+}
+
+// Use this to visualise the structure struc
+procedure show(struc) {
+    if struc == nil then
+        print("Please provide an existing structure")
+        return
+    end
+	initVisualisation()
+	local sol = onemodel(merge(AuxTheo, RushHourTheory),struc)
+	print(sol)
+	if sol ~= nil then
+		visualiseStruct(sol)
+	else
+		print("Your theory is unsatisfiable!")
+	end
+}
+
+// Use this to interactively visualise the structure struc
+procedure interact(struc) {
+    if struc == nil then
+        print("Please provide an existing structure")
+        return
+    end
+    initInteractiveVisualisation()
+    visualiseInteractively(struc)
+}
+
+
+
+
+////// Verifications //////
+
+procedure isSat(theo, struc) {
+    T1 = merge(theo, RushHourTheory)
+    T1 = merge(T1, AuxTheo);
+    return sat(T1, struc);
+}
+
+//It is possible to win the game.
+theory verification1: RushHourVoc {
+	
+}
+
+procedure verification1proc(struct) {
+	
+}
+
+//If the game has not ended at the start and at some other time it has ended, then the game is won at that time.
+theory verification2: RushHourVoc {
+    
+}
+
+procedure verification2proc(struct) {
+	
+}
+
+//When performing a move with a car and then a move inverse to this previous move (eg. first 2 squares left and then 2 squares right), the positions of all entities on the board remain unchanged. You can define auxiliary predicates/functions in verification3Voc to keep your theory cleaner.
+vocabulary verification3Voc {
+ 	extern vocabulary RushHourVoc
+    
+}
+
+theory verification3: verification3Voc {
+	
+}
+
+procedure verification3proc(struct) {
+    
+}
+
+
+//Check that the game is winnable in exactly 4 moves
+theory verification4: RushHourVoc {
+    
+}
+
+procedure verification4proc(struct) {
+	
+}
+
+//Verify that all positions that initially contain no entity are reachable from each other in any structure. You can define auxiliary predicates/functions in verification5Voc to keep your theory cleaner.
+vocabulary verification5Voc {
+ 	extern vocabulary RushHourVoc
+    
+}
+
+theory verification5: verification5Voc {
+    
+}
+
+procedure verification5proc(struct) {
+	
+}
+
+//Verify that once the game has ended, it stays that way.
+theory verification6: RushHourVoc {
+    
+}
+
+procedure verification6proc(struct) {
+	
+}
+
+//Verify that it is impossible to win without moving a green car.
+theory verification7: RushHourVoc {
+    
+}
+
+procedure verification7proc(struct) {
+	
+}
+
+
+//DO NOT CHANGE THIS PROCEDURE
+procedure allVerifications(){
+    print("The game is winnable:")
+    verification1proc(Easy_3by3)
+    print("Game ended means won if t not Start:")
+    verification2proc(In4Moves_4by4)
+    print("Moves are canceled out by their inverse:")
+    setvocabulary(Hardest4_4by4,verification3Voc)
+    verification3proc(Hardest4_4by4)
+    print("Game is winnable in exactly 4 moves:")
+    verification4proc(In4Moves_4by4)
+    print("All free positions are connected: ")
+    setvocabulary(Hardest4_4by4,verification5Voc)
+    verification5proc(Hardest4_4by4)
+    print("A game that has ended stays finished:")
+    verification6proc(Blocked_3by3)
+    print("Impossible to win without moving green car:")
+    verification7proc(Easy_3by3)
+}
+
+
+include "visualisation.idp"
+include "visualisationwithinteraction.idp"
+include "structures.idp"
