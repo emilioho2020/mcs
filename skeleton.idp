@@ -161,7 +161,7 @@ theory RushHourTheory : RushHourVoc {
     	! t [Time] : Won(t) <- ! c [Car] p [Pos] : Goal(c,p) => GetPos(t,c) = p.
         
         ! t [Time] : GameEnded(t) <- Won(t) |
-        	~? c [Car] dir [Dir] dist [Distance] : CanMove(t,c,dir,dist).
+        	~? c [Car] dir [Dir] dist [Distance] : CanMove(t,c,dir,dist) & dist ~= 0.
     }
     
     //IMPLEMENTATION OF CANMOVE (kan dit duidelijker?)
@@ -176,8 +176,7 @@ theory RushHourTheory : RushHourVoc {
         ! t [Time] c [Car] dist [Distance] : CanMove(t,c,Up,dist) <- 
         	GetOrientation(c) = Vert &
         	CanMove(t,c,Up,dist-1) & 
-        	(? p [Pos] : NewPos(GetPos(t,c),M(c,Up,dist)) = p) &
-        	(isFree(t,p)).
+        	isFree(t,NewPos(GetPos(t,c),M(c,Up,dist))).
         //Left
         ! t [Time] c [Car] dist [Distance] : CanMove(t,c,Left,dist) <- 
         	GetOrientation(c) = Hor &
@@ -188,12 +187,13 @@ theory RushHourTheory : RushHourVoc {
         	GetOrientation(c) = Hor &
         	CanMove(t,c,Right,dist-1) & 
         	P(x,y) = GetPos(t,c) & 
-        	(isFree(t,NewPos(P(x+GetSize(c)-1,y),M(c,Right,dist)))).
+        	isFree(t,NewPos(P(x+GetSize(c)-1,y),M(c,Right,dist))).
         //Down
-        ! t [Time] c [Car] dist [Distance] x [XCo] y [YCo]: CanMove(t,c,Left,dist) <- 
+        ! t [Time] c [Car] dist [Distance] x [XCo] y [YCo]: CanMove(t,c,Down,dist) <- 
         	GetOrientation(c) = Vert &
-        	CanMove(t,c,Left,dist-1) & 
-        	(isFree(t,NewPos(P(x,y-GetSize(c)),M(c,Left,dist)))).
+        	CanMove(t,c,Down,dist-1) & 
+        	P(x,y) = GetPos(t,c) &
+        	isFree(t,NewPos(P(x,y-GetSize(c)+1),M(c,Down,dist))).
     }
     
     
@@ -201,7 +201,7 @@ theory RushHourTheory : RushHourVoc {
     
     //only one move at a time before the game ends and move isn't zero (distance 0)
     ! t [Time] : ~GameEnded(t) => ?1 m [Move] : MoveAt(t,m).
-    ! t [Time] : ? c [Car], dir [Dir] , dist [Distance] : MoveAt(t,M(c,dir,dist)) & dist ~= 0.
+    ! t [Time] : ~GameEnded(t) => ? c [Car], dir [Dir] , dist [Distance] : MoveAt(t,M(c,dir,dist)) & dist ~= 0.
     //no moves after the game is ended
     ! t [Time] : GameEnded(t) => ~? m [Move] : MoveAt(t,m).
     
@@ -239,10 +239,15 @@ procedure main() {
     stdoptions.cpsupport = false
     stdoptions.groundwithbounds = false
     stdoptions.liftedunitpropagation = false
-    //allVerifications()
-    show(Easy_3by3)
-    //explainunsat(merge(AuxTheo, RushHourTheory),Easy_3by3)
+    //print(isSat(merge(AuxTheo, RushHourTheory),Easy_3by3))
+    allVerifications()
+    //show(Easy_3by3)
+    //show(Blocked_3by3)
+    //explainunsat(merge(AuxTheo, RushHourTheory),Blocked_3by3)
     //interact(Easy_3by3)
+    //show(In4Moves_4by4)
+    //interact(Hardest4_4by4)
+    
 }
 
 // Use this to visualise the structure struc
@@ -273,7 +278,6 @@ procedure interact(struc) {
 
 
 
-
 ////// Verifications //////
 
 procedure isSat(theo, struc) {
@@ -284,76 +288,101 @@ procedure isSat(theo, struc) {
 
 //It is possible to win the game.
 theory verification1: RushHourVoc {
-	
+	? t [Time] : Won(t).
 }
 
 procedure verification1proc(struct) {
-	
+	print(isSat(verification1,struct))
 }
 
 //If the game has not ended at the start and at some other time it has ended, then the game is won at that time.
 theory verification2: RushHourVoc {
-    
+    ! t [Time] : ~GameEnded(Start) & GameEnded(t) => Won(t).
 }
 
 procedure verification2proc(struct) {
-	
+	print(isSat(verification2,struct))
+    
+    //NOTE : isSat is too weak a verification but I don't find other procedures
+    //T1 = merge(RushHourTheory, AuxTheo);
+    //print(isinvariant(T1,verification2,struct)) doesn't work
 }
 
 //When performing a move with a car and then a move inverse to this previous move (eg. first 2 squares left and then 2 squares right), the positions of all entities on the board remain unchanged. You can define auxiliary predicates/functions in verification3Voc to keep your theory cleaner.
 vocabulary verification3Voc {
  	extern vocabulary RushHourVoc
-    
+    Inverse(Move,Move)
 }
 
 theory verification3: verification3Voc {
-	
+	! t [Time] m [Move] m2 [Move] : Inverse(m,m2) & MoveAt(t,m) & MoveAt(Next(t),m2) => (! c [Car] : GetPos(t,c) = GetPos(Next(Next(t)),c)).
 }
 
 procedure verification3proc(struct) {
-    
+    //NOTE : isSat is too weak a verification but I don't find other procedures
+    //T1 = merge(RushHourTheory, AuxTheo);
+    //print(isinvariant(T1,verification3,struct)) doesn't work
+    print(isSat(verification3,struct))
 }
 
 
 //Check that the game is winnable in exactly 4 moves
 theory verification4: RushHourVoc {
-    
+    Won(4).
 }
 
 procedure verification4proc(struct) {
-	
+	print(isSat(verification4,struct))
+    
 }
 
 //Verify that all positions that initially contain no entity are reachable from each other in any structure. You can define auxiliary predicates/functions in verification5Voc to keep your theory cleaner.
 vocabulary verification5Voc {
  	extern vocabulary RushHourVoc
-    
+    ConnectedFree(Pos,Pos)
 }
 
 theory verification5: verification5Voc {
+    {
+        ! p [Pos] : ConnectedFree(p,p) <- isFree(Start,p).
+        ! p [Pos] p2 [Pos] : ConnectedFree(p,p2) <- (? c [Entity] dir [Dir] : NewPos(p,M(c,dir,1)) = p2). //c is dummy variable (not needed)
+        ! p [Pos] p2 [Pos] : ConnectedFree(p,p2) <- (? p3 : ConnectedFree(p,p3) & ConnectedFree(p3,p2) & p ~= p3 & p3 ~= p2).
+    }
+    
+    ! p p2 : isFree(Start,p) & isFree(Start,p2) => ConnectedFree(p,p2).
+    
     
 }
 
 procedure verification5proc(struct) {
-	
+	//NOTE : isSat is too weak a verification but I don't find other procedures
+    //T1 = merge(RushHourTheory, AuxTheo);
+    //print(isinvariant(T1,verification5,struct)) doesn't work
+    print(isSat(verification5,struct))
 }
 
 //Verify that once the game has ended, it stays that way.
 theory verification6: RushHourVoc {
-    
+    ! t [Time] t2 [Time] : (t2 = Next(t) => (GameEnded(t) => GameEnded(t2))).
 }
 
 procedure verification6proc(struct) {
-	
+    print(isSat(verification6,struct))
+    //NOTE : isSat is too weak a verification but isinvariant doesn't work
+	//T1 = merge(RushHourTheory, AuxTheo);
+    //print(isinvariant(T1,verification6,struct))
 }
 
 //Verify that it is impossible to win without moving a green car.
 theory verification7: RushHourVoc {
-    
+    !t [Time] : Won(t) => (? t2 [Time] c dir dist: MoveAt(t2,M(c,dir,dist)) & GetColor(c) = Green).
 }
 
 procedure verification7proc(struct) {
-	
+    print(isSat(verification7,struct))
+	    //NOTE : isSat is too weak a verification but isinvariant doesn't work
+	//T1 = merge(RushHourTheory, AuxTheo);
+    //print(isinvariant(T1,verification7,struct))
 }
 
 
